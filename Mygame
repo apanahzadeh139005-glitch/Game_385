@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Force: Online Arena</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; user-select: none; }
+        body { background: #020205; color: #fff; overflow: hidden; touch-action: none; }
+        #app { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        .page { flex: 1; position: relative; display: none; flex-direction: column; align-items: center; padding: 20px; padding-bottom: 80px; overflow-y: auto; background: radial-gradient(circle at top, #1a0b2e, #020205); }
+        .page.active { display: flex; }
+        .header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 10px; }
+        .header h2 { color: #00e5ff; font-size: 1.5rem; text-shadow: 0 0 10px rgba(0, 229, 255, 0.5); }
+        .coin-display { background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; border: 1px solid #ffd700; color: #ffd700; font-weight: bold; }
+        #bottomNav { position: fixed; bottom: 0; left: 0; width: 100%; height: 70px; background: #0a0a15; display: flex; justify-content: space-around; align-items: center; border-top: 2px solid #00e5ff; z-index: 100; box-shadow: 0 -5px 20px rgba(0, 229, 255, 0.2); }
+        .nav-btn { background: none; border: none; color: #888; font-size: 1rem; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; transition: 0.3s; width: 25%; }
+        .nav-btn.active { color: #00e5ff; transform: translateY(-5px); text-shadow: 0 0 10px rgba(0,229,255,0.5); }
+        #gameCanvas { display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; }
+        .btn-play { background: linear-gradient(45deg, #00e5ff, #7000ff); border: none; padding: 15px 50px; font-size: 1.5rem; color: #fff; font-weight: bold; border-radius: 30px; margin-top: auto; margin-bottom: auto; cursor: pointer; box-shadow: 0 0 20px rgba(112, 0, 255, 0.5); }
+        .shop-list { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+        .shop-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(0,229,255,0.3); border-radius: 15px; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .shop-item.equipped { border-color: #00ff00; background: rgba(0, 255, 0, 0.1); }
+        .ship-info { display: flex; flex-direction: column; gap: 5px; }
+        .ship-name { font-size: 1.2rem; font-weight: bold; color: #fff; }
+        .buy-btn, .equip-btn { background: #ffd700; color: #000; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .equip-btn { background: #00e5ff; }
+        .lb-list { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 10px; }
+        .lb-item { display: flex; justify-content: space-between; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border-left: 4px solid #7000ff; }
+        #gameHud { position: absolute; top: 10px; left: 10px; right: 10px; display: none; justify-content: space-between; z-index: 20; font-size: 1.2rem; font-weight: bold; pointer-events: none; }
+        #gameOverMenu { position: absolute; inset: 0; background: rgba(0,0,0,0.85); z-index: 30; display: none; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .go-title { color: #ff0044; font-size: 3rem; margin-bottom: 20px; text-shadow: 0 0 20px #ff0044; }
+        .go-btn { background: #fff; color: #000; padding: 10px 30px; border-radius: 20px; font-size: 1.2rem; font-weight: bold; margin-top: 20px; cursor: pointer; border: none; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="page-home" class="page active">
+        <div class="header">
+            <h2>Space Force</h2>
+            <div class="coin-display">🪙 <span class="ui-coins">0</span></div>
+        </div>
+        <div style="margin: 20px 0; text-align:center;">
+            <label style="color:#aaa; font-size:0.9rem;">نام کاربری آنلاین شما:</label><br>
+            <input type="text" id="usernameInput" placeholder="اسم خودت رو بنویس..." style="background:#111; border:1px solid #00e5ff; color:#fff; padding:10px; border-radius:8px; margin-top:8px; text-align:center; font-size:1.1rem; font-weight:bold; width:80%; max-width:250px;">
+        </div>
+        <div style="font-size: 1.2rem; margin-bottom: 30px;">بهترین رکورد شما: <span id="ui-highscore" style="color:#00e5ff;">0</span></div>
+        <button class="btn-play" onclick="startGame()">شروع بازی</button>
+    </div>
+
+    <div id="page-shop" class="page">
+        <div class="header">
+            <h2>فروشگاه</h2>
+            <div class="coin-display">🪙 <span class="ui-coins">0</span></div>
+        </div>
+        <div class="shop-list" id="shopContainer"></div>
+    </div>
+
+    <div id="page-leaderboard" class="page">
+        <div class="header">
+            <h2>برترین خلبانان جهان 🏆</h2>
+        </div>
+        <div class="lb-list" id="lbContainer">
+            <p style="text-align:center;">در حال دریافت رتبه‌بندی آنلاین...</p>
+        </div>
+    </div>
+
+    <div id="bottomNav">
+        <button class="nav-btn active" onclick="switchPage('home', this)"><span>🏠</span><br>خانه</button>
+        <button class="nav-btn" onclick="switchPage('shop', this)"><span>🚀</span><br>فروشگاه</button>
+        <button class="nav-btn" onclick="switchPage('leaderboard', this)"><span>🏆</span><br>رتبه‌بندی</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="gameHud">
+        <div style="display:flex; gap:15px;">
+            <div id="hud-hp" style="color: #00ffcc;">❤️ 3</div>
+            <div id="hud-coins" style="color: #ffd700;">🪙 0</div>
+        </div>
+        <div id="hud-score" style="color: #fff;">⭐ 0</div>
+    </div>
+
+    <div id="gameOverMenu">
+        <h1 class="go-title">مأموریت شکست خورد</h1>
+        <h2 style="color: #fff; margin-bottom: 10px;">امتیاز: <span id="go-score">0</span></h2>
+        <h3 style="color: #ffd700; margin-bottom: 30px;">سکه‌ها: +<span id="go-coins">0</span></h3>
+        <button class="btn-play" onclick="startGame()">دوباره بازی کن</button>
+        <button class="go-btn" onclick="exitGame()">بازگشت به پایگاه</button>
+    </div>
+</div>
+
+<script>
+    // تنظیمات متصل شده به فایربیس اختصاصی امیرحسین
+    const firebaseConfig = {
+        apiKey: "AIzaSyDvn2F_oQjCv4NOqY-kUYAtvpouYmJtJ2M",
+        authDomain: "game-1cc88.firebaseapp.com",
+        databaseURL: "https://game-1cc88-default-rtdb.firebaseio.com/",
+        projectId: "game-1cc88",
+        storageBucket: "game-1cc88.firebasestorage.app",
+        messagingSenderId: "433155772408",
+        appId: "1:433155772408:web:78b5fac3eb5f30ba45500d"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    let db = JSON.parse(localStorage.getItem('sf_data')) || {
+        coins: 0, highScore: 0, ownedShips: ['basic'], currentShip: 'basic', username: 'Pilot_' + Math.floor(Math.random()*1000)
+    };
+    document.getElementById('usernameInput').value = db.username;
+
+    // قیمت‌ها اینجا کم شد
+    const SHIPS = {
+        'basic': { name: 'سفینه پایه', desc: 'تیربار معمولی', cost: 0, color: '#00e5ff', type: 'single', fireRate: 300, damage: 1 },
+        'machinegun': { name: 'مسلسل فضایی', desc: 'سرعت شلیک بالا', cost: 150, color: '#ffaa00', type: 'fast', fireRate: 150, damage: 1 },
+        'spread': { name: 'شات‌گان', desc: 'شلیک ۳ جهته', cost: 400, color: '#ff007f', type: 'spread', fireRate: 350, damage: 1 },
+        'laser': { name: 'لیزر پلاسما', desc: 'تیرهای نفوذگر', cost: 800, color: '#00ff00', type: 'pierce', fireRate: 400, damage: 3 }
+    };
+
+    function saveData() { 
+        let inputName = document.getElementById('usernameInput').value.trim();
+        db.username = inputName === '' ? 'Anonymous' : inputName;
+        localStorage.setItem('sf_data', JSON.stringify(db)); 
+        updateUI(); 
+    }
+
+    function updateUI() {
+        document.querySelectorAll('.ui-coins').forEach(el => el.innerText = db.coins);
+        document.getElementById('ui-highscore').innerText = db.highScore;
+        renderShop();
+    }
+
+    function switchPage(pageId, btnElement) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('page-' + pageId).classList.add('active');
+        btnElement.classList.add('active');
+        if(pageId === 'leaderboard') fetchOnlineLeaderboard();
+    }
+
+    function renderShop() {
+        const container = document.getElementById('shopContainer'); container.innerHTML = '';
+        Object.keys(SHIPS).forEach(key => {
+            const ship = SHIPS[key]; const isOwned = db.ownedShips.includes(key); const isEquipped = db.currentShip === key;
+            let btnHtml = isEquipped ? `<button class="equip-btn" disabled style="background:#555;color:#fff;">مجهز شده</button>` : (isOwned ? `<button class="equip-btn" onclick="equipShip('${key}')">انتخاب</button>` : `<button class="buy-btn" onclick="buyShip('${key}')">${ship.cost} 🪙</button>`);
+            container.innerHTML += `<div class="shop-item ${isEquipped ? 'equipped' : ''}"><div class="ship-info"><span class="ship-name" style="color: ${ship.color}">${ship.name}</span><span class="ship-desc">${ship.desc}</span></div>${btnHtml}</div>`;
+        });
+    }
+    
+    function buyShip(key) { if (db.coins >= SHIPS[key].cost) { db.coins -= SHIPS[key].cost; db.ownedShips.push(key); saveData(); } else { alert('سکه نداری!'); } }
+    function equipShip(key) { db.currentShip = key; saveData(); }
+
+    function sendScoreToFirebase(name, score) {
+        if(score <= 0) return;
+        database.ref('leaderboard/' + name).set({ username: name, score: score });
+    }
+
+    function fetchOnlineLeaderboard() {
+        const lb = document.getElementById('lbContainer');
+        lb.innerHTML = '<p style="text-align:center;">در حال دریافت جدول جهانی...</p>';
+        database.ref('leaderboard').orderByChild('score').limitToLast(10).once('value', (snapshot) => {
+            lb.innerHTML = '';
+            let list = [];
+            snapshot.forEach(child => { list.push(child.val()); });
+            list.reverse();
+            if(list.length === 0) { lb.innerHTML = '<p style="text-align:center;">هنوز هیچ رکوردی ثبت نشده!</p>'; return; }
+            list.forEach((m, i) => {
+                lb.innerHTML += `
+                    <div class="lb-item" style="${m.username === db.username ? 'border-left-color: #00ff00; background: rgba(0,255,0,0.05);' : ''}">
+                        <span>#${i+1} ${m.username}</span>
+                        <span style="color:#00e5ff;">⭐ ${m.score}</span>
+                    </div>`;
+            });
+        }).catch(err => {
+            lb.innerHTML = '<p style="text-align:center; color:#ff0044;">⚠️ نتونست به دیتابیس وصل شه.</p>';
+        });
+    }
+
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+    let width, height, isRunning = false, reqId, lastTime = 0;
+    let player, bullets, enemyBullets, enemies, powerups, particles, stars;
+    let score = 0, sessionCoins = 0, wave = 1; let lastShootTime = 0, spawnTimer = 0;
+
+    function resize() {
+        width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height;
+        stars = Array.from({length: 40}, () => ({ x: Math.random() * width, y: Math.random() * height, s: Math.random() * 2 + 1, v: Math.random() * 2 + 0.5 }));
+    }
+    window.addEventListener('resize', resize);
+
+    function startGame() {
+        saveData();
+        document.getElementById('bottomNav').style.display = 'none';
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('gameOverMenu').style.display = 'none';
+        canvas.style.display = 'block'; document.getElementById('gameHud').style.display = 'flex';
+        resize();
+        const shipData = SHIPS[db.currentShip];
+        player = { x: width/2, y: height-100, r: 21, color: shipData.color, hp: 3, weapon: shipData, shield: 0, magnet: 0 };
+        bullets = []; enemyBullets = []; enemies = []; powerups = []; particles = []; score = 0; sessionCoins = 0; wave = 1;
+        updateGameHud(); isRunning = true; lastTime = performance.now(); requestAnimationFrame(gameLoop);
+    }
+
+    function exitGame() {
+        canvas.style.display = 'none'; document.getElementById('gameHud').style.display = 'none'; document.getElementById('gameOverMenu').style.display = 'none';
+        document.getElementById('bottomNav').style.display = 'flex'; document.getElementById('page-home').classList.add('active'); updateUI();
+    }
+
+    canvas.addEventListener('touchmove', e => { if(!isRunning) return; e.preventDefault(); player.x = e.touches[0].clientX; player.y = e.touches[0].clientY - 40; limitPlayer(); }, {passive: false});
+    canvas.addEventListener('mousemove', e => { if(!isRunning) return; player.x = e.clientX; player.y = e.clientY; limitPlayer(); });
+    function limitPlayer() { if(player.x < player.r) player.x = player.r; if(player.x > width - player.r) player.x = width - player.r; if(player.y < 0) player.y = 0; if(player.y > height - player.r) player.y = height - player.r; }
+    function spawnParticle(x, y, color, count) { for(let i=0; i<count; i++) { particles.push({ x, y, color, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 1, size: Math.random()*3+2 }); } }
+    
+    // تابع بررسی برخورد
+    function isHit(a, b) { 
+        let dx = a.x - b.x, dy = a.y - b.y; 
+        return Math.sqrt(dx*dx + dy*dy) < (a.r || a.size) + (b.r || b.size); 
+    }
+
+    function spawnEnemy() {
+        wave = 1 + Math.floor(score/30); let r = Math.random();
+        let type = 'basic', hp = 1*wave, color = '#ff0044', size = 20, v = 2 + wave*0.2;
+        if (r < 0.2) { type = 'shooter'; color = '#ff8800'; hp = 2; size = 22; v = 1.8; }
+        else if (r < 0.35) { type = 'asteroid'; color = '#888'; hp = 4*wave; size = 35; v = 1.2; }
+        enemies.push({ type, hp, maxHp: hp, color, size, x: Math.random()*(width-size*2)+size, y: -size, v, lastShot: 0 });
+    }
+
+    function spawnPowerup(x, y) {
+        if(Math.random() > 0.15) return;
+        const types = ['hp', 'shield', 'magnet']; const pType = types[Math.floor(Math.random()*types.length)];
+        let color = pType === 'hp' ? '#00ff00' : (pType === 'shield' ? '#00e5ff' : '#ffd700');
+        powerups.push({ x, y, type: pType, color, size: 14, v: 2 });
+    }
+
+    function updateGameHud() { document.getElementById('hud-hp').innerText = `❤️ ${player.hp}`; document.getElementById('hud-coins').innerText = `🪙 ${sessionCoins}`; document.getElementById('hud-score').innerText = `⭐ ${score}`; }
+    function playerTakeDamage() { if(player.shield > 0) return; player.hp--; updateGameHud(); if(player.hp <= 0) gameOver(); }
+
+    function gameLoop(time) {
+        if(!isRunning) return; let dt = time - lastTime; lastTime = time;
+        ctx.fillStyle = '#020205'; ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#fff'; stars.forEach(s => { s.y += s.v; if(s.y > height) { s.y = 0; s.x = Math.random()*width; } ctx.fillRect(s.x, s.y, s.s, s.s); });
+
+        if(player.shield > 0) player.shield -= dt; if(player.magnet > 0) player.magnet -= dt;
+
+        if(time - lastShootTime > player.weapon.fireRate) {
+            let w = player.weapon;
+            if(w.type === 'single' || w.type === 'fast' || w.type === 'pierce') bullets.push({x: player.x, y: player.y-player.r, v: -12, c: w.color, dmg: w.damage, pierce: w.type==='pierce'});
+            else if(w.type === 'spread') { bullets.push({x: player.x, y: player.y-player.r, vx: 0, v: -10, c: w.color, dmg: w.damage}); bullets.push({x: player.x-15, y: player.y-player.r, vx: -2.5, v: -9, c: w.color, dmg: w.damage}); bullets.push({x: player.x+15, y: player.y-player.r, vx: 2.5, v: -9, c: w.color, dmg: w.damage}); }
+            lastShootTime = time;
+        }
+
+        spawnTimer -= dt; if(spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(500, 1400 - wave*100); }
+
+        ctx.save(); ctx.translate(player.x, player.y);
+        if(player.shield > 0) { ctx.beginPath(); ctx.arc(0,0, player.r+8, 0, Math.PI*2); ctx.strokeStyle = 'rgba(0,229,255,0.8)'; ctx.lineWidth = 2; ctx.stroke(); }
+        ctx.fillStyle = player.color; ctx.beginPath(); ctx.moveTo(0, -player.r); ctx.lineTo(player.r, player.r); ctx.lineTo(-player.r, player.r); ctx.fill(); ctx.restore();
+
+        for(let i=bullets.length-1; i>=0; i--) { let b = bullets[i]; b.y += b.v; b.x += (b.vx||0); ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); if(b.y < -10) bullets.splice(i,1); }
+        
+        // باگ تیرهای قرمز اینجا کامل فیکس شد
+        for(let i=enemyBullets.length-1; i>=0; i--) { 
+            let eb = enemyBullets[i]; eb.y += eb.v; 
+            ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.size, 0, Math.PI*2); ctx.fill(); 
+            if(isHit(eb, {x:player.x, y:player.y, size:player.r})) { playerTakeDamage(); enemyBullets.splice(i,1); continue; } 
+            if(eb.y > height+10) enemyBullets.splice(i,1); 
+        }
+
+        for(let i=powerups.length-1; i>=0; i--) {
+            let p = powerups[i]; if(player.magnet > 0 && p.type === 'coin') { let dx = player.x - p.x, dy = player.y - p.y; let angle = Math.atan2(dy, dx); p.x += Math.cos(angle)*7; p.y += Math.sin(angle)*7; } else { p.y += p.v; }
+            ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+            if(isHit(p, {x:player.x, y:player.y, size:player.r})) { if(p.type === 'coin') sessionCoins++; if(p.type === 'hp') player.hp++; if(p.type === 'shield') player.shield = 5000; if(p.type === 'magnet') player.magnet = 8000; updateGameHud(); powerups.splice(i,1); continue; }
+            if(p.y > height+20) powerups.splice(i,1);
+        }
+
+        for(let i=enemies.length-1; i>=0; i--) {
+            let e = enemies[i]; e.y += e.v;
+            // ساخت تیر دشمن همراه با پارامتر size
+            if(e.type === 'shooter' && time - e.lastShot > 1400) { enemyBullets.push({x: e.x, y: e.y+e.size, v: 5.5, size: 5}); e.lastShot = time; }
+            ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, Math.PI*2); ctx.fill();
+
+            if(isHit(e, {x:player.x, y:player.y, size:player.r})) { playerTakeDamage(); spawnParticle(e.x, e.y, e.color, 15); enemies.splice(i,1); continue; }
+
+            for(let j=bullets.length-1; j>=0; j--) {
+                let b = bullets[j];
+                if(isHit(e, {x:b.x, y:b.y, size:4})) {
+                    e.hp -= b.dmg; spawnParticle(b.x, b.y, '#fff', 3); if(!b.pierce) bullets.splice(j,1);
+                    if(e.hp <= 0) {
+                        spawnParticle(e.x, e.y, e.color, 15); score += e.type==='asteroid'?4:1;
+                        if(e.type === 'asteroid' && e.size === 35) { enemies.push({type:'asteroid', hp:2*wave, maxHp:2*wave, color:'#888', size:18, x:e.x-15, y:e.y, v:e.v*1.4}); enemies.push({type:'asteroid', hp:2*wave, maxHp:2*wave, color:'#888', size:18, x:e.x+15, y:e.y, v:e.v*1.4}); }
+                        if(Math.random() > 0.6) powerups.push({x:e.x, y:e.y, type:'coin', color:'#ffd700', size:7, v:2}); else spawnPowerup(e.x, e.y);
+                        enemies.splice(i,1); updateGameHud();
+                    }
+                    break;
+                }
+            }
+            if(e.y > height+e.size) enemies.splice(i,1);
+        }
+
+        for(let i=particles.length-1; i>=0; i--) { let p = particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=0.04; if(p.life<=0) { particles.splice(i,1); continue; } ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life); ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
+        reqId = requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver() {
+        isRunning = false; cancelAnimationFrame(reqId);
+        db.coins += sessionCoins;
+        
+        if(score > db.highScore) { db.highScore = score; }
+        sendScoreToFirebase(db.username, score); 
+        saveData();
+
+        document.getElementById('go-score').innerText = score;
+        document.getElementById('go-coins').innerText = sessionCoins;
+        document.getElementById('gameOverMenu').style.display = 'flex';
+    }
+
+    updateUI();
+</script>
+</body>
+</html>
